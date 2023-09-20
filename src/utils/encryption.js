@@ -1,5 +1,6 @@
 import { AES, enc } from 'crypto-js';
 
+
 export function encrypt(message, password) {
   // Encrypt
   let cipherText = AES.encrypt(

@@ -1,6 +1,6 @@
-import firebase from "firebase/compat/app";
-import "firebase/compat/firestore";
+// import "firebase/compat/firestore";
 import { db } from "../firebase";
+import { arrayUnion } from "firebase/firestore";
 const { encrypt } = require("../utils/encryption.js");
 
 export class ChatManager {
@@ -35,14 +35,27 @@ export class ChatManager {
     return this.chats.doc(chatId);
   }
 
+  // generate a shared secret key with the public key of the recipient
+  static async getUserKeyPair(userId) {
+    const userInfo = await db.collection("users").doc(userId).get();
+
+    if (userInfo.exists) {
+      return userInfo.data();
+    }
+
+    return null;
+  }
+
   /* Start a new conversation with the respondent where the messageID
     is a concatenation of the sender's id and the recipient's id
   */
   async sendChat(
     recipientId,
     existingChatId,
+    secretKey,
     chat,
-    isNewChat = false,
+    onSubmitNewChat,
+    isNewChat = false
   ) {
     // create the chat
     try {
@@ -55,27 +68,28 @@ export class ChatManager {
         document = this.chats.doc();
       }
 
-      const encryptedMessage = encrypt(chat, "beans");
+      const encryptedMessage = encrypt(chat,  secretKey);
 
       await document.set(
         {
           senderId: this.senderId,
           recipientId,
-          chats: [
+          chats: arrayUnion(
             {
               chat: encryptedMessage,
+              rawChat: chat,
               sender: this.senderId,
               timeSent: new Date(),
             },
-          ],
+          ),
         },
         { merge: true }
       );
 
-      // // update the id of the provider with the new chat Id
-      // if (isNewChat) {
-      //   onSubmitNewChat(document.id);
-      // }
+      // update the id of the provider with the new chat Id
+      if (isNewChat) {
+        onSubmitNewChat(document.id);
+      }
 
       // get the id of the chat document that was just created
       chatId = isNewChat ? document.id : existingChatId;
